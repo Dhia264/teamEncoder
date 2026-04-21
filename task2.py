@@ -1,98 +1,55 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import random
-from itertools import combinations
 
-# ---- parameters from the task ----
+# message space
+messages = [
+    "000","001","010","011",
+    "100","101","110","111"
+]
 
-# input x = 1001000
-x_input = [1, 0, 0, 1, 0, 0, 0]
+#given codebook 
+codebook = [
+"0000000","1000110","0100101","1100011",
+"0010011","1010101","0110110","1110000",
+"0001111","1001001","0101010","1101100",
+"0011100","1011010","0111001","1111111"
+]
 
-r_bound = 1   # max errors for Bob
-s_bound = 3   # max errors for Eve
+# XOR strings
+def xor_bits(a, b):
+    return "".join(str(int(x)^int(y)) for x, y in zip(a, b))
 
-num_trials = 2**14   # number of simulations (>= 16384)
-
-
-def get_error_vector(n, max_errors):
-    possible_errors = []
+# encoder
+def random_binning_encoder(d):
     
-    for weight in range(max_errors + 1):
-        for indices in combinations(range(n), weight):
-            err = [0] * n
-            
-            for i in indices:
-                err[i] = 1
-                
-            possible_errors.append(err)
+    # compute complement d_bar = d XOR 111
+    d_bar = xor_bits(d, "111")
     
-    return random.choice(possible_errors)
-
-
-# ---- storage ----
-y_results = []
-z_results = []
-
-# ---- simulation ----
-for _ in range(num_trials):
+    valid_codewords = []
     
-    # independent errors
-    err_y = get_error_vector(7, r_bound)
-    err_z = get_error_vector(7, s_bound)
+    for cw in codebook:
+        prefix = cw[:4]
+        
+        # check prefix rule
+        if prefix == "0" + d or prefix == "1" + d_bar:
+            valid_codewords.append(cw)
     
-    # XOR (mod 2)
-    y = [(x_input[i] + err_y[i]) % 2 for i in range(7)]
-    z = [(x_input[i] + err_z[i]) % 2 for i in range(7)]
+    # must have exactly 2 codewords
+    if len(valid_codewords) != 2:
+        print("Error: bin size is not 2")
     
-    # store as strings
-    y_results.append("".join(map(str, y)))
-    z_results.append("".join(map(str, z)))
-
-
-# ---- plotting ----
-def plot_results(data, title):
-    unique_vals = sorted(list(set(data)))
-    probs = [data.count(v) / num_trials for v in unique_vals]
+    # choose randomly
+    chosen = random.choice(valid_codewords)
     
-    plt.figure(figsize=(12, 5))
-    plt.bar(unique_vals, probs)
+    return chosen, valid_codewords
+
+
+# verification 
+print("Testing encoder with different messages:\n")
+
+for d in messages:
+    chosen, bin_set = random_binning_encoder(d)
     
-    plt.title(title)
-    plt.xticks(rotation=90, fontsize=8)
-    plt.ylabel("empirical probability")
-    
-    plt.tight_layout()
-    plt.show()
-
-
-print("plotting distributions...")
-
-plot_results(y_results, "Bob distribution p(y|x), r=1")
-plot_results(z_results, "Eve distribution p(z|x), s=3")
-
-
-# ---- conditional independence check ----
-print("\nchecking if y and z are conditionally independent...")
-
-# joint distribution
-joint = {}
-for i in range(num_trials):
-    pair = (y_results[i], z_results[i])
-    joint[pair] = joint.get(pair, 0) + 1
-
-# normalize
-for key in joint:
-    joint[key] /= num_trials
-
-# compare p(y,z) with p(y)p(z) for a few samples
-print("\nsome comparisons (p(y,z) vs p(y)*p(z)):")
-
-for i in range(10):
-    y_val = y_results[i]
-    z_val = z_results[i]
-    
-    p_y = y_results.count(y_val) / num_trials
-    p_z = z_results.count(z_val) / num_trials
-    p_joint = joint[(y_val, z_val)]
-    
-    print(f"{p_joint:.6f}  vs  {p_y * p_z:.6f}")
+    print(f"message: {d}")
+    print(f"bin: {bin_set}")
+    print(f"chosen codeword: {chosen}")
+    print("-" * 40)
